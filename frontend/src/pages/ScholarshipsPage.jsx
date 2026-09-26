@@ -57,35 +57,37 @@ const ScholarshipsPage = () => {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 w-full">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Browse Scholarships</h1>
-        <p className="text-gray-600">Discover and apply for scholarships that match your profile.</p>
+    <div className="w-full bg-[#f8f7f2] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+      <div className="mb-8 rounded-[2rem] bg-[#19263a] px-6 py-8 text-white shadow-xl shadow-[#19263a]/10 sm:px-9">
+        <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.2em] text-[#f7c85b]">Scholarship directory</p>
+        <h1 className="font-display text-4xl leading-none sm:text-5xl">Find the right opportunity.</h1>
+        <p className="mt-4 max-w-2xl text-slate-300">Explore verified schemes and focus on the ones that make sense for your next step.</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-8 flex flex-col md:flex-row gap-4">
+      <div className="mb-8 flex flex-col gap-4 rounded-2xl border border-[#e6e3dc] bg-[#fffdfa] p-4 shadow-sm md:flex-row">
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-5 w-5 text-gray-400" />
           </div>
           <input
             type="text"
-            className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+            className="block w-full rounded-xl border border-[#dcd9d1] bg-white py-3 pl-10 pr-3 text-[#19263a] outline-none transition placeholder:text-slate-400 focus:border-[#6858e8] focus:ring-4 focus:ring-[#6858e8]/10"
             placeholder="Search scholarships by name or keywords..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="flex items-center overflow-x-auto pb-2 md:pb-0 hide-scrollbar gap-2">
-          <Filter className="h-5 w-5 text-gray-400 mr-2 shrink-0" />
+          <Filter className="mr-2 h-5 w-5 shrink-0 text-[#5d4ee4]" />
           {filters.map(filter => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 activeFilter === filter 
-                  ? 'bg-indigo-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-[#5d4ee4] text-white shadow-md shadow-[#5d4ee4]/20'
+                  : 'bg-[#f0eee8] text-[#4f5b6d] hover:bg-[#e6e3dc]'
               }`}
             >
               {filter}
@@ -101,7 +103,7 @@ const ScholarshipsPage = () => {
       ) : (
         <>
           {error && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredScholarships.map(scholarship => (
               <ScholarshipCard key={scholarship.id} scholarship={scholarship} />
             ))}
@@ -114,6 +116,7 @@ const ScholarshipsPage = () => {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 };

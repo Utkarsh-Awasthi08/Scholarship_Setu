@@ -11,17 +11,17 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
   };
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border ${(scholarship.unlockedBy || scholarship.unlocked_by) ? 'border-yellow-400' : 'border-gray-200'} overflow-hidden transition-all hover:shadow-md flex flex-col`}>
+    <div className={`flex flex-col overflow-hidden rounded-2xl border bg-[#fffdfa] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${(scholarship.unlockedBy || scholarship.unlocked_by) ? 'border-[#f1c65b]' : 'border-[#e6e3dc]'}`}>
       {(scholarship.unlockedBy || scholarship.unlocked_by) && (
-        <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-yellow-900 text-xs font-bold px-3 py-1.5 flex items-center">
+        <div className="flex items-center bg-gradient-to-r from-[#f8d66c] to-[#f4bf4e] px-4 py-2 text-xs font-bold text-[#60470d]">
           <Award className="w-3.5 h-3.5 mr-1" /> Unlocked by {scholarship.unlockedBy || scholarship.unlocked_by}
         </div>
       )}
       
-      <div className={`p-5 ${compact ? 'pb-4' : ''} flex-1`}>
+      <div className={`flex-1 p-5 ${compact ? 'pb-4' : ''}`}>
         <div className="flex justify-between items-start mb-2">
           <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-            (scholarship.type || scholarship.level) === 'State' || (scholarship.type || scholarship.level) === 'state' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+            (scholarship.type || scholarship.level) === 'State' || (scholarship.type || scholarship.level) === 'state' ? 'bg-[#e3f3f1] text-[#11766e]' : 'bg-[#eeeaff] text-[#5544d3]'
           }`}>
             {(scholarship.type || scholarship.level)} Scheme
           </span>
@@ -39,17 +39,17 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
           )}
         </div>
         
-        <h3 className={`${compact ? 'text-lg' : 'text-xl'} font-bold text-gray-900 mb-1`}>{scholarship.name}</h3>
-        <p className="text-sm text-gray-500 mb-4">By {scholarship.provider || scholarship.department}</p>
+        <h3 className={`${compact ? 'text-lg' : 'text-xl'} mb-1 font-bold text-[#19263a]`}>{scholarship.name}</h3>
+        <p className="mb-4 text-sm text-slate-500">By {scholarship.provider || scholarship.department}</p>
         
         <div className="flex items-end justify-between mb-4">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Amount</p>
-            <p className="text-xl font-bold text-green-600">{scholarship.amount || scholarship.amount_description}</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Amount</p>
+            <p className="text-xl font-bold text-[#168279]">{scholarship.amount || scholarship.amount_description}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Deadline</p>
-            <p className="text-sm font-medium text-gray-800">{scholarship.deadline || 'Check portal'}</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Deadline</p>
+            <p className="text-sm font-medium text-[#344158]">{scholarship.deadline || 'Check portal'}</p>
           </div>
         </div>
 
@@ -66,12 +66,12 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
             return (
               <>
                 {tags.slice(0, 3).map((tag, idx) => (
-                  <span key={idx} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                  <span key={idx} className="rounded-md bg-[#f0eee8] px-2 py-1 text-xs text-[#596579]">
                     {tag}
                   </span>
                 ))}
                 {tags.length > 3 && (
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">+{tags.length - 3}</span>
+                  <span className="rounded-md bg-[#f0eee8] px-2 py-1 text-xs text-[#596579]">+{tags.length - 3}</span>
                 )}
               </>
             );
@@ -79,17 +79,17 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
         </div>
 
         {expanded && (
-          <div className="text-sm text-gray-600 border-t pt-3 mt-2">
+          <div className="mt-2 border-t border-[#ebe8e0] pt-3 text-sm text-slate-600">
             <p>{scholarship.description}</p>
           </div>
         )}
       </div>
 
-      <div className="bg-gray-50 px-5 py-3 border-t flex justify-between items-center">
+      <div className="flex items-center justify-between border-t border-[#ebe8e0] bg-[#faf9f5] px-5 py-3">
         {compact ? (
           <button 
             onClick={() => setExpanded(!expanded)} 
-            className="text-sm font-medium text-indigo-600 flex items-center hover:text-indigo-800"
+            className="flex items-center text-sm font-semibold text-[#5d4ee4] hover:text-[#4334bc]"
           >
             {expanded ? (
               <>Less details <ChevronUp className="w-4 h-4 ml-1" /></>
@@ -98,11 +98,11 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
             )}
           </button>
         ) : (
-          <button onClick={() => setExpanded(!expanded)} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-transparent">
+          <button onClick={() => setExpanded(!expanded)} className="bg-transparent text-sm font-semibold text-[#5d4ee4] hover:text-[#4334bc]">
             {expanded ? 'Hide Details' : 'View Details'}
           </button>
         )}
-        <a href={scholarship.application_url} target="_blank" rel="noreferrer" className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center">
+        <a href={scholarship.application_url} target="_blank" rel="noreferrer" className="flex items-center rounded-lg bg-[#5d4ee4] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4d3ed2]">
           Official portal <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
         </a>
       </div>
