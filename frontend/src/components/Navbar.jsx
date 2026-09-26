@@ -1,9 +1,12 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { GraduationCap, MessageSquare, BookOpen, Clock, Menu, User } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { GraduationCap, MessageSquare, BookOpen, Clock, LogOut, Menu, User } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = React.useState(false);
 
   const navLinks = [
@@ -11,7 +14,7 @@ const Navbar = () => {
     { name: 'ChatBot', path: '/chat', icon: <MessageSquare className="w-5 h-5" /> },
     { name: 'Scholarships', path: '/scholarships', icon: <BookOpen className="w-5 h-5" /> },
     { name: 'Track Status', path: '/track', icon: <Clock className="w-5 h-5" /> },
-    { name: 'Login', path: '/login', icon: <User className="w-5 h-5" /> },
+    ...(user ? [] : [{ name: 'Login', path: '/login', icon: <User className="w-5 h-5" /> }]),
   ];
 
   return (
@@ -42,6 +45,7 @@ const Navbar = () => {
                 {link.name}
               </Link>
             ))}
+            {user && <button onClick={async () => { await signOut(); navigate('/'); }} className="px-3 py-2 rounded-md text-sm font-medium flex items-center text-gray-300 hover:bg-gray-700 hover:text-white"><LogOut className="mr-1.5 w-5 h-5" />Sign out</button>}
           </div>
 
           <div className="flex items-center md:hidden">
@@ -74,6 +78,7 @@ const Navbar = () => {
                 {link.name}
               </Link>
             ))}
+            {user && <button onClick={async () => { await signOut(); setIsOpen(false); navigate('/'); }} className="block w-full px-3 py-2 rounded-md text-base font-medium text-left text-gray-300 hover:bg-gray-700 hover:text-white flex items-center"><LogOut className="mr-2 w-5 h-5" />Sign out</button>}
           </div>
         </div>
       )}

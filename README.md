@@ -115,6 +115,9 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 
+# From the project root, copy .env.example to .env and set JWT_SECRET.
+# Set INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD once to create the first admin account.
+
 # Start the FastAPI server
 python -m uvicorn app.main:app --reload --port 8000
 ```
@@ -134,6 +137,17 @@ Create a `.env` file in the `frontend` folder and add your Google Client ID for 
 ```env
 VITE_GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
 ```
+
+Create a root `.env` from [`.env.example`](.env.example) before starting the backend. `JWT_SECRET` is required; administrators are created only when both `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` are set. The frontend sends Google credentials to the backend, where they are verified against `GOOGLE_CLIENT_ID` before a session is issued.
+
+## Account and Application Flow
+
+1. Students create an account with an email and password, or use configured Google sign-in.
+2. The completed and confirmed chat profile is stored against that account. The system saves its scholarship recommendations, but it does not claim to submit an application to an external government portal.
+3. The student chooses **Save application** for a recommendation. That local application is visible in **Track Status** and can be updated by an administrator.
+4. Only server-authenticated administrators can access the admin endpoints, verify documents, and change application status.
+
+Uploaded identity documents are deliberately excluded from Git. Keep them in private production storage and configure retention and access policies before handling real applicant data.
 
 ---
 

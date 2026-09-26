@@ -11,10 +11,10 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
   };
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border ${scholarship.unlockedBy ? 'border-yellow-400' : 'border-gray-200'} overflow-hidden transition-all hover:shadow-md flex flex-col`}>
-      {scholarship.unlockedBy && (
+    <div className={`bg-white rounded-xl shadow-sm border ${(scholarship.unlockedBy || scholarship.unlocked_by) ? 'border-yellow-400' : 'border-gray-200'} overflow-hidden transition-all hover:shadow-md flex flex-col`}>
+      {(scholarship.unlockedBy || scholarship.unlocked_by) && (
         <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-yellow-900 text-xs font-bold px-3 py-1.5 flex items-center">
-          <Award className="w-3.5 h-3.5 mr-1" /> Unlocked by {scholarship.unlockedBy}
+          <Award className="w-3.5 h-3.5 mr-1" /> Unlocked by {scholarship.unlockedBy || scholarship.unlocked_by}
         </div>
       )}
       
@@ -49,7 +49,7 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
           </div>
           <div className="text-right">
             <p className="text-xs text-gray-500 uppercase tracking-wide">Deadline</p>
-            <p className="text-sm font-medium text-gray-800">{scholarship.deadline ? new Date(scholarship.deadline).toLocaleDateString() : 'N/A'}</p>
+            <p className="text-sm font-medium text-gray-800">{scholarship.deadline || 'Check portal'}</p>
           </div>
         </div>
 
@@ -78,8 +78,8 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
           })()}
         </div>
 
-        {(!compact || expanded) && (
-          <div className={`text-sm text-gray-600 border-t pt-3 mt-2 ${expanded ? 'block' : 'hidden'}`}>
+        {expanded && (
+          <div className="text-sm text-gray-600 border-t pt-3 mt-2">
             <p>{scholarship.description}</p>
           </div>
         )}
@@ -98,13 +98,13 @@ const ScholarshipCard = ({ scholarship, compact = false }) => {
             )}
           </button>
         ) : (
-          <button className="text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-transparent">
-            View Details
+          <button onClick={() => setExpanded(!expanded)} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 bg-transparent">
+            {expanded ? 'Hide Details' : 'View Details'}
           </button>
         )}
-        <button className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center">
-          Apply Now <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
-        </button>
+        <a href={scholarship.application_url} target="_blank" rel="noreferrer" className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center">
+          Official portal <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+        </a>
       </div>
     </div>
   );

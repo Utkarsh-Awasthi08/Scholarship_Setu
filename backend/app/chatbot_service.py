@@ -3,7 +3,7 @@ import re
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.models import Student, ChatSession, ScholarshipScheme, Achievement
+from app.models import Achievement, Application, ChatSession, Document, Education, ScholarshipScheme, Student, User
 from app.schemas import ChatResponse
 from app.ocr_service import process_document, validate_document_authenticity
 from datetime import datetime
@@ -76,9 +76,15 @@ def calculate_progress(step: str) -> float:
     return round((idx / (len(STEPS) - 1)) * 100, 1)
 
 
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png"}
+ALLOWED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+
+
 class ChatbotService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, user: Optional[User] = None):
         self.db = db
+        self.user = user
 
     async def get_or_create_session(self, session_id: str) -> ChatSession:
         result = await self.db.execute(select(ChatSession).filter(ChatSession.id == session_id))
@@ -86,9 +92,10 @@ class ChatbotService:
         if not session:
             session = ChatSession(
                 id=session_id,
+                user_id=self.user.id if self.user else None,
                 session_data={},
                 current_step='welcome',
-                collected_data={"achievements": []}
+                collected_data={"achievements": [], "document_records": []}
             )
             self.db.add(session)
             await self.db.commit()
@@ -97,6 +104,12 @@ class ChatbotService:
         if not isinstance(session.collected_data.get("achievements"), list):
             collected = dict(session.collected_data)
             collected["achievements"] = []
+            session.collected_data = collected
+            await self.db.commit()
+
+        if not isinstance(session.collected_data.get("document_records"), list):
+            collected = dict(session.collected_data)
+            collected["document_records"] = []
             session.collected_data = collected
             await self.db.commit()
 
@@ -130,19 +143,17 @@ class ChatbotService:
         is_mp = state_val in ['mp', 'madhya pradesh', 'madhyapradesh']
         category_val = collected.get('ask_category', '').lower()
 
-        # Skip Samagra ID if not from MP
-        if next_step == 'ask_samagra' and not is_mp:
+        while next_step in {'ask_samagra', 'doc_caste_cert', 'doc_domicile'}:
+            should_skip = (
+                (next_step == 'ask_samagra' and not is_mp)
+                or (next_step == 'doc_caste_cert' and category_val == 'general')
+                or (next_step == 'doc_domicile' and not is_mp)
+            )
+            if not should_skip:
+                break
             idx += 1
-            next_step = STEPS[idx]
-
-        # Skip caste certificate if General category
-        if next_step == 'doc_caste_cert' and category_val == 'general':
-            idx += 1
-            next_step = STEPS[idx]
-
-        # Skip domicile if not from MP
-        if next_step == 'doc_domicile' and not is_mp:
-            idx += 1
+            if idx >= len(STEPS):
+                return 'complete'
             next_step = STEPS[idx]
 
         return next_step
@@ -315,11 +326,31 @@ class ChatbotService:
             # Handle document upload
             ocr_result = None
             if file:
-                # Save uploaded file
+                from pathlib import Path
+
+                filename = Path(file.filename or "document").name
+                suffix = Path(filename).suffix.lower()
+                if file.content_type not in ALLOWED_IMAGE_TYPES or suffix not in ALLOWED_IMAGE_SUFFIXES:
+                    return self._make_response(
+                        session_id,
+                        "⚠️ Please upload a JPG or PNG image smaller than 10 MB.",
+                        current_step,
+                        requires_file=True,
+                    )
+
+                content = await file.read(MAX_UPLOAD_BYTES + 1)
+                if len(content) > MAX_UPLOAD_BYTES:
+                    return self._make_response(
+                        session_id,
+                        "⚠️ This file is larger than 10 MB. Please upload a smaller image.",
+                        current_step,
+                        requires_file=True,
+                    )
+
+                # Save the file under a server-generated name, never the client path.
                 upload_dir = os.path.join("uploads", session_id)
                 os.makedirs(upload_dir, exist_ok=True)
-                file_path = os.path.join(upload_dir, f"{current_step}_{file.filename}")
-                content = await file.read()
+                file_path = os.path.join(upload_dir, f"{current_step}_{uuid.uuid4().hex}{suffix}")
                 with open(file_path, "wb") as f:
                     f.write(content)
 
@@ -334,9 +365,19 @@ class ChatbotService:
                     'doc_domicile': 'domicile'
                 }
                 doc_type = doc_type_map.get(current_step, 'other')
+                collected["pending_document"] = {
+                    "doc_step": current_step,
+                    "doc_type": doc_type,
+                    "file_path": file_path,
+                }
+                session.collected_data = collected
+                await self.db.commit()
 
                 try:
                     ocr_result = await process_document(file_path, doc_type)
+                    collected["pending_document"]["ocr_result"] = ocr_result
+                    session.collected_data = collected
+                    await self.db.commit()
 
                     if ocr_result['status'] == 'failed':
                         # OCR failed — offer manual review
@@ -394,8 +435,15 @@ class ChatbotService:
                 msg = await self.generate_step_message(current_step, collected)
                 return self._make_response(session_id, msg, current_step, requires_file=True)
 
-            if 'manual' in msg_lower or 'insist' in msg_lower or 'correct' in msg_lower:
+            pending_result = (collected.get("pending_document") or {}).get("ocr_result")
+            requires_manual_review = (
+                'manual' in msg_lower
+                or 'insist' in msg_lower
+                or ('correct' in msg_lower and pending_result is not None)
+            )
+            if requires_manual_review:
                 collected[current_step] = "manual_review"
+                self._record_document(collected, current_step, "manual_review", ocr_result)
                 session.collected_data = collected
                 next_step = self._get_next_step(current_step, collected)
                 session.current_step = next_step
@@ -421,6 +469,7 @@ class ChatbotService:
 
             # Document accepted (either via OCR success or user confirmation)
             collected[current_step] = "verified" if (ocr_result and ocr_result.get('status') == 'success') else "uploaded"
+            self._record_document(collected, current_step, collected[current_step], ocr_result)
             session.collected_data = collected
             next_step = self._get_next_step(current_step, collected)
             session.current_step = next_step
@@ -483,7 +532,17 @@ class ChatbotService:
 
         # ─── SCHOLARSHIP RECOMMENDATIONS ────────────────────────────
         if current_step == 'recommend_scholarships':
+            if message.strip().lower() not in {'confirm', 'confirm - show scholarships', 'yes', 'y'}:
+                return self._make_response(
+                    session_id,
+                    "Please confirm the profile summary before I generate recommendations. To correct details, reset the chat and enter them again.",
+                    'recommend_scholarships',
+                    collected_data=collected,
+                    options=["Confirm - Show Scholarships"],
+                )
             matches = await self.get_matching_scholarships(collected)
+            student = await self.persist_profile(session, collected)
+            await self.save_recommendations(student, matches)
             session.current_step = 'complete'
             await self.db.commit()
 
@@ -515,6 +574,7 @@ class ChatbotService:
                 resp += f"   🔗 Apply: {s.application_url}\n\n"
 
                 scholarship_list.append({
+                    "id": s.id,
                     "name": s.name,
                     "short_name": s.short_name,
                     "amount": s.amount_description,
@@ -681,6 +741,25 @@ class ChatbotService:
             collected_data=collected
         )
 
+    def _record_document(self, collected: dict, current_step: str, status: str, ocr_result: Optional[dict]) -> None:
+        pending = collected.get("pending_document")
+        if not pending or pending.get("doc_step") != current_step:
+            return
+
+        records = [
+            record for record in collected.get("document_records", [])
+            if record.get("doc_step") != current_step
+        ]
+        record = dict(pending)
+        stored_result = record.pop("ocr_result", None)
+        result = ocr_result or stored_result
+        record["ocr_status"] = status
+        record["ocr_extracted_data"] = (result or {}).get("extracted_data")
+        record["ocr_confidence"] = (result or {}).get("confidence")
+        records.append(record)
+        collected["document_records"] = records
+        collected.pop("pending_document", None)
+
     def _get_step_options(self, step: str) -> Optional[list]:
         """Return quick-reply options for steps that need them"""
         options_map = {
@@ -743,6 +822,9 @@ class ChatbotService:
         elif step == 'ask_email':
             if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v):
                 return False, "📧 Please enter a valid email address.\n_Example: rahul@gmail.com_", v
+            v = v.lower()
+            if self.user and self.user.email.lower() != v:
+                return False, "Please use the email address associated with your ScholarSetu account.", v
 
         elif step == 'ask_pan':
             v = v.upper().replace(' ', '')
@@ -810,7 +892,150 @@ class ChatbotService:
     async def check_duplicate_pan(self, pan: str) -> bool:
         result = await self.db.execute(select(Student).filter(Student.pan_card == pan))
         existing = result.scalars().first()
-        return existing is not None
+        return existing is not None and (not self.user or existing.user_id != self.user.id)
+
+    async def persist_profile(self, session: ChatSession, collected: dict) -> Student:
+        """Persist a completed, confirmed chat profile for the authenticated account."""
+        if not self.user:
+            raise RuntimeError("A signed-in account is required to save a scholarship profile.")
+
+        pan_card = collected.get('ask_pan', '')
+        result = await self.db.execute(select(Student).filter(Student.user_id == self.user.id))
+        student = result.scalars().first()
+
+        conflict = await self.db.execute(
+            select(Student).filter(Student.pan_card == pan_card, Student.user_id != self.user.id)
+        )
+        if conflict.scalars().first():
+            raise ValueError("This PAN card is already associated with another account.")
+
+        try:
+            dob = datetime.strptime(collected['ask_dob'], '%Y-%m-%d').date()
+        except ValueError:
+            for fmt in ('%d-%m-%Y', '%d/%m/%Y', '%Y/%m/%d'):
+                try:
+                    dob = datetime.strptime(collected['ask_dob'], fmt).date()
+                    break
+                except ValueError:
+                    continue
+            else:
+                raise ValueError("The date of birth could not be saved.")
+
+        student_values = {
+            'full_name': collected['ask_name'],
+            'father_name': collected['ask_father_name'],
+            'mother_name': collected['ask_mother_name'],
+            'dob': dob,
+            'gender': collected['ask_gender'],
+            'category': collected['ask_category'],
+            'religion': collected['ask_religion'],
+            'mobile': collected['ask_mobile'],
+            'email': self.user.email,
+            'pan_card': pan_card,
+            'aadhaar_number': collected['ask_aadhaar'],
+            'samagra_id': collected.get('ask_samagra'),
+            'state': collected['ask_state'],
+            'district': collected['ask_district'],
+            'address': collected['ask_address'],
+            'pincode': collected['ask_pincode'],
+            'family_annual_income': float(collected['ask_income']),
+            'is_bpl': collected.get('ask_bpl', '').lower() in {'yes', 'y'},
+            'is_disabled': collected.get('ask_disability', '').lower() in {'yes', 'y'},
+            'disability_percentage': None,
+            'bank_account_number': collected['ask_bank_account'],
+            'ifsc_code': collected['ask_ifsc'],
+            'is_from_mp': bool(collected.get('is_from_mp')),
+        }
+        if student:
+            for key, value in student_values.items():
+                setattr(student, key, value)
+        else:
+            student = Student(user_id=self.user.id, **student_values)
+            self.db.add(student)
+            await self.db.flush()
+
+        education_values = {
+            'board_10th': collected['ask_10th_board'],
+            'percentage_10th': float(collected['ask_10th_percentage']),
+            'year_10th': int(collected['ask_10th_year']),
+            'board_12th': collected['ask_12th_board'],
+            'percentage_12th': float(collected['ask_12th_percentage']),
+            'year_12th': int(collected['ask_12th_year']),
+            'stream_12th': collected['ask_12th_stream'],
+            'current_course': collected['ask_current_course'],
+            'current_year': int(collected['ask_current_year']),
+            'institution_name': collected['ask_institution'],
+            'institution_type': collected['ask_institution_type'],
+            'is_rural_area': collected.get('ask_rural_urban', '').lower() == 'rural',
+        }
+        education_result = await self.db.execute(select(Education).filter(Education.student_id == student.id))
+        education = education_result.scalars().first()
+        if education:
+            for key, value in education_values.items():
+                setattr(education, key, value)
+        else:
+            self.db.add(Education(student_id=student.id, **education_values))
+
+        docs_result = await self.db.execute(select(Document).filter(Document.student_id == student.id))
+        documents_by_type = {document.doc_type: document for document in docs_result.scalars().all()}
+        for record in collected.get('document_records', []):
+            doc_type = record.get('doc_type')
+            file_path = record.get('file_path')
+            if not doc_type or not file_path:
+                continue
+            values = {
+                'file_path': file_path,
+                'ocr_extracted_data': record.get('ocr_extracted_data'),
+                'ocr_confidence': record.get('ocr_confidence'),
+                'ocr_status': record.get('ocr_status', 'uploaded'),
+                'is_verified': record.get('ocr_status') == 'verified',
+                'verification_method': 'ocr' if record.get('ocr_status') == 'verified' else None,
+            }
+            document = documents_by_type.get(doc_type)
+            if document:
+                for key, value in values.items():
+                    setattr(document, key, value)
+            else:
+                self.db.add(Document(student_id=student.id, doc_type=doc_type, **values))
+
+        achievements_result = await self.db.execute(select(Achievement).filter(Achievement.student_id == student.id))
+        existing_achievement_keys = {
+            (achievement.name.lower(), achievement.year) for achievement in achievements_result.scalars().all()
+        }
+        for achievement in collected.get("achievements", []):
+            name = str(achievement.get("name", "")).strip()
+            try:
+                year = int(achievement.get("year"))
+            except (TypeError, ValueError):
+                continue
+            if name and (name.lower(), year) not in existing_achievement_keys:
+                self.db.add(Achievement(
+                    student_id=student.id,
+                    achievement_type="self_reported",
+                    name=name,
+                    detail=str(achievement.get("detail") or name),
+                    year=year,
+                ))
+
+        session.student_id = student.id
+        await self.db.commit()
+        await self.db.refresh(student)
+        return student
+
+    async def save_recommendations(self, student: Student, matches: list) -> None:
+        """Store recommendations so the student can decide which ones to submit."""
+        result = await self.db.execute(select(Application).filter(Application.student_id == student.id))
+        existing_by_scheme = {application.scheme_id: application for application in result.scalars().all()}
+        for match in matches:
+            scheme = match["scheme"]
+            if scheme.id not in existing_by_scheme:
+                self.db.add(Application(
+                    student_id=student.id,
+                    scheme_id=scheme.id,
+                    status="recommended",
+                    match_score=match["match_score"],
+                ))
+        await self.db.commit()
 
     async def get_matching_scholarships(self, student_data: dict) -> list:
         result = await self.db.execute(select(ScholarshipScheme).filter(ScholarshipScheme.is_active == True))

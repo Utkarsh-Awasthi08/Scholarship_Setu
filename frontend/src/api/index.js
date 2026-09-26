@@ -3,9 +3,34 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
+  withCredentials: true,
 });
 
 export default {
+  async register(email, password) {
+    const res = await api.post('/auth/register', { email, password });
+    return res.data;
+  },
+
+  async login(identifier, password) {
+    const res = await api.post('/auth/login', { identifier, password });
+    return res.data;
+  },
+
+  async googleLogin(credential) {
+    const res = await api.post('/auth/google', { credential });
+    return res.data;
+  },
+
+  async getMe() {
+    const res = await api.get('/auth/me');
+    return res.data;
+  },
+
+  async logout() {
+    await api.post('/auth/logout');
+  },
+
   async startChat() {
     const res = await api.post('/chat/start', {});
     return res.data;
@@ -47,62 +72,31 @@ export default {
     return res.data;
   },
 
-  async checkPan(pan) {
-    const res = await api.get(`/chat/session-by-pan/${pan}`);
+  async getApplications() {
+    const res = await api.get('/applications/me');
     return res.data;
   },
 
-  async uploadDocument(sessionId, docType, file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('doc_type', docType);
-    formData.append('session_id', sessionId);
-    const res = await api.post('/documents/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+  async submitApplication(schemeId) {
+    const res = await api.post(`/applications/${schemeId}/submit`);
     return res.data;
   },
 
   async getAdminApplications() {
-    // Mock API call for admin applications
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve([
-          {
-            id: 'APP001',
-            studentName: 'Harsh Gupta',
-            email: 'harsh@example.com',
-            scholarshipName: 'Post Matric Scholarship',
-            dateApplied: '2023-10-15',
-            status: 'Pending',
-            documents: [
-              { id: 'doc_1', name: 'Aadhaar Card', status: 'Pending' },
-              { id: 'doc_2', name: 'Income Certificate', status: 'Verified' }
-            ]
-          },
-          {
-            id: 'APP002',
-            studentName: 'Riya Singh',
-            email: 'riya@example.com',
-            scholarshipName: 'Medhavi Chhatra Yojana',
-            dateApplied: '2023-10-16',
-            status: 'Approved',
-            documents: [
-              { id: 'doc_3', name: '10th Marksheet', status: 'Verified' },
-              { id: 'doc_4', name: '12th Marksheet', status: 'Verified' }
-            ]
-          }
-        ]);
-      }, 1000);
-    });
+    const res = await api.get('/admin/applications');
+    return res.data.applications;
   },
 
-  async verifyDocument(docId) {
-    // Mock API call for document verification
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ success: true, message: `Document ${docId} verified successfully` });
-      }, 500);
+  async verifyDocument(docId, notes = '') {
+    const res = await api.post(`/admin/documents/${docId}/verify`, { notes });
+    return res.data;
+  },
+
+  async updateApplicationStatus(applicationId, status, rejectionReason = null) {
+    const res = await api.patch(`/admin/applications/${applicationId}`, {
+      status,
+      rejection_reason: rejectionReason,
     });
+    return res.data;
   }
 };

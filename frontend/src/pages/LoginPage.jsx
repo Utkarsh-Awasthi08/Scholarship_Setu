@@ -1,244 +1,144 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { User, ShieldCheck, UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
+import { ArrowLeft, LogIn, ShieldCheck, User, UserPlus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+import { useAuth } from '../auth/AuthContext';
+import api from '../api';
+
+
+function readableError(error) {
+  return error.response?.data?.detail || 'We could not complete that request. Please try again.';
+}
+
 
 const LoginPage = () => {
-  const [step, setStep] = useState(1); // 1: Role, 2: Student Action (New/Old), 3: Credentials Form
+  const [step, setStep] = useState(1);
   const [role, setRole] = useState('student');
-  const [studentAction, setStudentAction] = useState('login'); // 'login' or 'register'
-  const navigate = useNavigate();
-
-  const [userId, setUserId] = useState('');
+  const [studentAction, setStudentAction] = useState('login');
+  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const { signIn } = useAuth();
+  const googleEnabled = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
-  const handleNextStep = (e) => {
-    e.preventDefault();
-    setError('');
-    if (step === 1) {
-      if (role === 'admin') {
-        setStep(3); // Admins go straight to login
-      } else {
-        setStep(2); // Students choose New/Old
-      }
-    }
-  };
-
-  const handleStudentActionSelection = (action) => {
+  const goToAccountStep = (nextRole = role, action = studentAction) => {
+    setRole(nextRole);
     setStudentAction(action);
     setError('');
     setStep(3);
   };
 
-  const handleFinalSubmit = async (e) => {
-    e.preventDefault();
+  const finishLogin = (user, destination) => {
+    signIn(user);
+    navigate(destination, { replace: true });
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError('');
-    
-    if (role === 'admin') {
-      if (userId === 'admin' && password === 'admin') {
-        navigate('/admin');
-      } else {
-        setError('Invalid Admin credentials. (Hint: use admin/admin)');
+    setLoading(true);
+    try {
+      if (role === 'admin') {
+        const user = await api.login(identifier, password);
+        if (user.role !== 'admin') throw new Error('This account does not have administrator access.');
+        finishLogin(user, '/admin');
+        return;
       }
-    } else {
+
       if (studentAction === 'register') {
-        navigate('/chat');
-      } else {
-        // Authenticate existing student
-        setLoading(true);
-        try {
-          // Import api here or at top if not imported. Wait, I'll need to import api.
-          // Let's assume we can fetch directly or import.
-          const res = await fetch(`http://127.0.0.1:8000/api/chat/session-by-pan/${userId}`);
-          const data = await res.json();
-          if (data.exists) {
-            navigate('/track', { state: { pan: userId } });
-          } else {
-            setError('PAN Card / Samagra ID not found. Please register as a New User.');
-          }
-        } catch (err) {
-          setError('Error connecting to server.');
-        } finally {
-          setLoading(false);
-        }
+        if (password.length < 12) throw new Error('Use a password with at least 12 characters.');
+        if (password !== confirmPassword) throw new Error('The two passwords do not match.');
+        const user = await api.register(email, password);
+        finishLogin(user, '/chat');
+        return;
       }
+
+      const user = await api.login(identifier, password);
+      if (user.role !== 'student') throw new Error('Use an administrator account to access the admin portal.');
+      finishLogin(user, '/track');
+    } catch (requestError) {
+      setError(requestError.response ? readableError(requestError) : requestError.message);
+    } finally {
+      setLoading(false);
     }
   };
-  
-  const handleGmailLogin = () => {
-    if (role === 'admin') navigate('/admin');
-    else if (studentAction === 'register') navigate('/chat');
-    else navigate('/track');
+
+  const handleGoogleSuccess = async ({ credential }) => {
+    setError('');
+    setLoading(true);
+    try {
+      const user = await api.googleLogin(credential);
+      finishLogin(user, studentAction === 'register' ? '/chat' : '/track');
+    } catch (requestError) {
+      setError(readableError(requestError));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="flex flex-1 items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden relative">
-        {step > 1 && (
-          <button 
-            onClick={() => setStep(step - 1)}
-            className="absolute top-6 left-4 text-white hover:text-indigo-200 transition z-10"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-        )}
-        
-        <div className="bg-indigo-600 p-6 text-center text-white relative">
-          <h2 className="text-3xl font-bold mb-2">Welcome</h2>
-          <p className="text-indigo-100">
-            {step === 1 ? 'Select your role to continue' : 
-             step === 2 ? 'Are you a new or existing user?' : 
-             studentAction === 'register' ? 'Register for ScholarSetu' : 'Sign in to your account'}
-          </p>
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+        <div className="relative bg-indigo-600 p-6 text-center text-white">
+          {step > 1 && <button onClick={() => { setStep(step - 1); setError(''); }} className="absolute left-4 top-6 text-white hover:text-indigo-200" aria-label="Back"><ArrowLeft /></button>}
+          <h1 className="text-3xl font-bold">Welcome to ScholarSetu</h1>
+          <p className="mt-2 text-indigo-100">{step === 1 ? 'Choose how you want to continue' : step === 2 ? 'Choose your student account type' : role === 'admin' ? 'Administrator sign in' : studentAction === 'register' ? 'Create your student account' : 'Sign in to your student account'}</p>
         </div>
-        
-        <div className="p-8">
-          {/* STEP 1: Select Role */}
-          {step === 1 && (
-            <form onSubmit={handleNextStep}>
-              <div className="mb-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <label className={`cursor-pointer border-2 rounded-xl p-6 flex flex-col items-center transition-all ${
-                    role === 'student' ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'
-                  }`}>
-                    <input type="radio" name="role" value="student" className="hidden" 
-                      checked={role === 'student'} onChange={() => setRole('student')} />
-                    <User className={`w-10 h-10 mb-3 ${role === 'student' ? 'text-indigo-600' : 'text-gray-400'}`} />
-                    <span className={`font-semibold text-lg ${role === 'student' ? 'text-indigo-800' : 'text-gray-600'}`}>Student</span>
-                  </label>
-                  
-                  <label className={`cursor-pointer border-2 rounded-xl p-6 flex flex-col items-center transition-all ${
-                    role === 'admin' ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'
-                  }`}>
-                    <input type="radio" name="role" value="admin" className="hidden" 
-                      checked={role === 'admin'} onChange={() => setRole('admin')} />
-                    <ShieldCheck className={`w-10 h-10 mb-3 ${role === 'admin' ? 'text-indigo-600' : 'text-gray-400'}`} />
-                    <span className={`font-semibold text-lg ${role === 'admin' ? 'text-indigo-800' : 'text-gray-600'}`}>Admin</span>
-                  </label>
-                </div>
-              </div>
-              <button type="submit" 
-                className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition duration-200 shadow-md">
-                Continue
-              </button>
-            </form>
-          )}
 
-          {/* STEP 2: Student New/Old Selection */}
-          {step === 2 && (
+        <div className="p-8">
+          {step === 1 && (
             <div className="space-y-4">
-              <button 
-                onClick={() => handleStudentActionSelection('register')}
-                className="w-full border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 rounded-xl p-5 flex items-center transition-all text-left"
-              >
-                <div className="bg-indigo-100 p-3 rounded-full mr-4 text-indigo-600">
-                  <UserPlus className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900">I am a New User</h3>
-                  <p className="text-sm text-gray-500">Register and find scholarships</p>
-                </div>
+              <button onClick={() => { setRole('student'); setStep(2); }} className="flex w-full items-center rounded-xl border-2 border-gray-200 p-5 text-left transition hover:border-indigo-600 hover:bg-indigo-50">
+                <span className="mr-4 rounded-full bg-indigo-100 p-3 text-indigo-600"><User /></span>
+                <span><strong className="block text-gray-900">Student</strong><small className="text-gray-500">Find and manage scholarship applications</small></span>
               </button>
-              
-              <button 
-                onClick={() => handleStudentActionSelection('login')}
-                className="w-full border-2 border-gray-200 hover:border-indigo-600 hover:bg-indigo-50 rounded-xl p-5 flex items-center transition-all text-left"
-              >
-                <div className="bg-green-100 p-3 rounded-full mr-4 text-green-600">
-                  <LogIn className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900">I am an Existing User</h3>
-                  <p className="text-sm text-gray-500">Login to track application</p>
-                </div>
+              <button onClick={() => goToAccountStep('admin', 'login')} className="flex w-full items-center rounded-xl border-2 border-gray-200 p-5 text-left transition hover:border-indigo-600 hover:bg-indigo-50">
+                <span className="mr-4 rounded-full bg-slate-100 p-3 text-slate-700"><ShieldCheck /></span>
+                <span><strong className="block text-gray-900">Administrator</strong><small className="text-gray-500">Review submitted applications and documents</small></span>
               </button>
             </div>
           )}
 
-          {/* STEP 3: Credentials Form */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <button onClick={() => goToAccountStep('student', 'register')} className="flex w-full items-center rounded-xl border-2 border-gray-200 p-5 text-left transition hover:border-indigo-600 hover:bg-indigo-50">
+                <span className="mr-4 rounded-full bg-indigo-100 p-3 text-indigo-600"><UserPlus /></span>
+                <span><strong className="block text-gray-900">Create an account</strong><small className="text-gray-500">Start a new scholarship profile</small></span>
+              </button>
+              <button onClick={() => goToAccountStep('student', 'login')} className="flex w-full items-center rounded-xl border-2 border-gray-200 p-5 text-left transition hover:border-indigo-600 hover:bg-indigo-50">
+                <span className="mr-4 rounded-full bg-green-100 p-3 text-green-600"><LogIn /></span>
+                <span><strong className="block text-gray-900">Sign in</strong><small className="text-gray-500">Track your saved applications</small></span>
+              </button>
+            </div>
+          )}
+
           {step === 3 && (
-            <form onSubmit={handleFinalSubmit}>
-              {studentAction === 'register' && role !== 'admin' ? (
-                <div className="mb-6 text-center">
-                  <p className="text-gray-600 mb-6">
-                    Registration is completed through our AI Chatbot. The bot will ask you for your details and documents step-by-step.
-                  </p>
-                  <button type="submit" 
-                    className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition duration-200 shadow-md">
-                    Start AI Registration
-                  </button>
-                </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+              {role === 'student' && studentAction === 'register' ? (
+                <>
+                  <label className="block text-sm font-medium text-gray-700">Email address<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3" /></label>
+                  <label className="block text-sm font-medium text-gray-700">Password<input type="password" required minLength="12" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3" /></label>
+                  <label className="block text-sm font-medium text-gray-700">Confirm password<input type="password" required minLength="12" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3" /></label>
+                </>
               ) : (
                 <>
-                  {error && (
-                    <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
-                      {error}
-                    </div>
-                  )}
-                  
-                  <div className="mb-4">
-                    <label className="block text-gray-700 font-semibold mb-2" htmlFor="userId">
-                      {role === 'student' ? 'PAN Card / Samagra ID' : 'Admin ID / Email'}
-                    </label>
-                    <input 
-                      id="userId"
-                      type="text" 
-                      required
-                      value={userId}
-                      onChange={(e) => setUserId(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 uppercase"
-                      placeholder={role === 'student' ? 'e.g. ABCDE1234F' : 'admin@scholarsetu.gov'}
-                    />
-                  </div>
-
-                  <div className="mb-8">
-                    <label className="block text-gray-700 font-semibold mb-2" htmlFor="password">
-                      Password
-                    </label>
-                    <input 
-                      id="password"
-                      type="password" 
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  
-                  <button type="submit" disabled={loading}
-                    className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition duration-200 shadow-md disabled:opacity-70">
-                    {loading ? 'Authenticating...' : 'Sign In'}
-                  </button>
+                  <label className="block text-sm font-medium text-gray-700">{role === 'admin' ? 'Administrator email' : 'Email address or PAN'}<input type="text" required autoComplete="username" value={identifier} onChange={(event) => setIdentifier(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3 uppercase" placeholder={role === 'admin' ? 'admin@example.gov.in' : 'name@example.com or ABCDE1234F'} /></label>
+                  <label className="block text-sm font-medium text-gray-700">Password<input type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3" /></label>
                 </>
               )}
-              
-              <div className="mt-6 flex items-center justify-center">
-                <span className="h-px bg-gray-300 flex-1"></span>
-                <span className="px-4 text-sm text-gray-500">OR</span>
-                <span className="h-px bg-gray-300 flex-1"></span>
-              </div>
-              
-              <div className="mt-6 flex justify-center">
-                <GoogleLogin
-                  onSuccess={(credentialResponse) => {
-                    const decoded = jwtDecode(credentialResponse.credential);
-                    console.log('Google User:', decoded);
-                    // Same logic as before
-                    if (role === 'admin') navigate('/admin');
-                    else if (studentAction === 'register') navigate('/chat');
-                    else navigate('/track');
-                  }}
-                  onError={() => {
-                    console.error('Login Failed');
-                  }}
-                  text="continue_with"
-                  width="100%"
-                />
-              </div>
+              <button type="submit" disabled={loading} className="w-full rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white transition hover:bg-indigo-700 disabled:opacity-60">{loading ? 'Please wait…' : studentAction === 'register' ? 'Create account' : 'Sign in'}</button>
+              {role === 'student' && googleEnabled && (
+                <>
+                  <div className="flex items-center gap-3 py-2"><span className="h-px flex-1 bg-gray-200" /><span className="text-xs text-gray-500">OR</span><span className="h-px flex-1 bg-gray-200" /></div>
+                  <div className="flex justify-center"><GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign-in was cancelled or failed.')} text="continue_with" width="360" /></div>
+                </>
+              )}
             </form>
           )}
         </div>

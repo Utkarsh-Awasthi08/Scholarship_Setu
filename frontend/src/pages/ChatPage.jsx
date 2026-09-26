@@ -46,6 +46,7 @@ const ChatPage = () => {
   const [progress, setProgress] = useState(0);
   const [showFormPreview, setShowFormPreview] = useState(null); // { schemeName, shortName }
   const [scholarshipsData, setScholarshipsData] = useState(null);
+  const [submittedSchemeIds, setSubmittedSchemeIds] = useState(new Set());
 
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
@@ -183,6 +184,26 @@ const ChatPage = () => {
 
   const handleFileUpload = (file) => handleSendMessage(null, file);
 
+  const handleSubmitApplication = async (scholarship) => {
+    try {
+      await api.submitApplication(scholarship.id);
+      setSubmittedSchemeIds((current) => new Set([...current, scholarship.id]));
+      setMessages((current) => [...current, {
+        id: Date.now(),
+        type: 'bot',
+        content: `✅ **${scholarship.name}** has been saved as a submitted ScholarSetu application. You can track its status from **Track Status**.`,
+        timestamp: new Date().toISOString(),
+      }]);
+    } catch (error) {
+      setMessages((current) => [...current, {
+        id: Date.now(),
+        type: 'bot',
+        content: `❌ ${error.response?.data?.detail || 'We could not save this application.'}`,
+        timestamp: new Date().toISOString(),
+      }]);
+    }
+  };
+
   const handleResetChat = async () => {
     if (!sessionId) return;
     try {
@@ -191,6 +212,7 @@ const ChatPage = () => {
       setCollectedData({});
       setProgress(0);
       setScholarshipsData(null);
+      setSubmittedSchemeIds(new Set());
       setShowFormPreview(null);
       setShowUpload(false);
       setMessages([{
@@ -276,9 +298,16 @@ const ChatPage = () => {
                         >
                           <FileText className="w-3.5 h-3.5" /> View Filled Form
                         </button>
+                        <button
+                          onClick={() => handleSubmitApplication(s)}
+                          disabled={submittedSchemeIds.has(s.id)}
+                          className="text-xs bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg hover:bg-amber-100 transition font-medium disabled:opacity-60"
+                        >
+                          {submittedSchemeIds.has(s.id) ? 'Saved to applications' : 'Save application'}
+                        </button>
                         <a href={s.application_url} target="_blank" rel="noreferrer"
                           className="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-100 transition font-medium">
-                          Apply on Portal →
+                          Official portal →
                         </a>
                       </div>
                     </div>

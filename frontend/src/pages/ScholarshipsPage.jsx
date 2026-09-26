@@ -6,6 +6,7 @@ import api from '../api';
 const ScholarshipsPage = () => {
   const [scholarships, setScholarships] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
 
@@ -18,46 +19,13 @@ const ScholarshipsPage = () => {
     const fetchScholarships = async () => {
       try {
         setLoading(true);
+        setError('');
         const res = await api.getScholarships();
         setScholarships(res || []);
       } catch (err) {
         console.error('Error fetching scholarships', err);
-        // Fallback dummy data for demo purposes if backend is unavailable
-        setScholarships([
-          {
-            id: 1,
-            name: "MP Post Matric Scholarship",
-            provider: "Govt of MP",
-            amount: "₹15,000",
-            type: "State",
-            eligibility: ["SC/ST/OBC", "Income < 2.5L", "MP Domicile"],
-            deadline: "2024-12-31",
-            matchScore: 95,
-            description: "Financial assistance to students belonging to SC/ST/OBC categories studying at post-matriculation or post-secondary stage."
-          },
-          {
-            id: 2,
-            name: "Central Sector Scheme",
-            provider: "Govt of India",
-            amount: "₹10,000 - ₹20,000",
-            type: "Central",
-            eligibility: ["Top 20th percentile", "Income < 4.5L"],
-            deadline: "2024-10-31",
-            matchScore: 82,
-            description: "To provide financial assistance to meritorious students from low-income families to meet a part of their day-to-day expenses while pursuing higher studies."
-          },
-          {
-            id: 3,
-            name: "Gaon Ki Beti Yojana",
-            provider: "Govt of MP",
-            amount: "₹5,000",
-            type: "State",
-            eligibility: ["Female", "Rural Area", "Class 12th 60%+"],
-            deadline: "2024-11-15",
-            matchScore: 45,
-            description: "Encouraging talented girls of rural areas to pursue higher education."
-          }
-        ]);
+        setScholarships([]);
+        setError('Scholarships could not be loaded. Start the backend and try again.');
       } finally {
         setLoading(false);
       }
@@ -77,6 +45,7 @@ const ScholarshipsPage = () => {
     if (activeFilter === 'Female Only') return s.eligibility_gender === 'Female';
     if (activeFilter === 'SC/ST') return s.eligibility_category?.includes('SC') || s.eligibility_category?.includes('ST');
     if (activeFilter === 'OBC') return s.eligibility_category?.includes('OBC');
+    if (activeFilter === 'General') return s.eligibility_category === 'General' || s.eligibility_category === 'All';
     
     // Achievement filters (check name/description since unlockedBy might not be present on raw schemes list)
     if (activeFilter === 'NTSE Eligible') return s.name?.includes('NTSE') || s.description?.includes('NTSE');
@@ -130,16 +99,20 @@ const ScholarshipsPage = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredScholarships.map(scholarship => (
-            <ScholarshipCard key={scholarship.id} scholarship={scholarship} />
-          ))}
-          {filteredScholarships.length === 0 && (
-            <div className="col-span-full text-center py-12 text-gray-500">
-              No scholarships found matching your criteria.
-            </div>
-          )}
-        </div>
+        <>
+          {error && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredScholarships.map(scholarship => (
+              <ScholarshipCard key={scholarship.id} scholarship={scholarship} />
+            ))}
+            {filteredScholarships.length === 0 && !error && (
+              <div className="col-span-full text-center py-12 text-gray-500">
+                No scholarships found matching your criteria.
+              </div>
+            )}
+            {error && <div className="col-span-full py-12 text-center text-gray-500">No verified scholarship records are available while the service is offline.</div>}
+          </div>
+        </>
       )}
     </div>
   );

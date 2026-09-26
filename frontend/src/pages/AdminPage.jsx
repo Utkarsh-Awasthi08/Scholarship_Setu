@@ -1,149 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, CheckCircle, Clock, Search, XCircle } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CheckCircle, FileText, Search } from 'lucide-react';
 import api from '../api';
+
+
+const STATUSES = ['submitted', 'under_review', 'approved', 'rejected', 'disbursed'];
 
 const AdminPage = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-
-  useEffect(() => {
-    fetchApplications();
-  }, []);
+  const [error, setError] = useState('');
 
   const fetchApplications = async () => {
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      const data = await api.getAdminApplications();
-      setApplications(data);
-    } catch (error) {
-      console.error('Error fetching applications:', error);
+      setApplications(await api.getAdminApplications());
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'Could not load applications.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerify = async (appId, docId) => {
+  useEffect(() => { fetchApplications(); }, []);
+
+  const filteredApps = useMemo(() => applications.filter((application) => (
+    application.student_name.toLowerCase().includes(searchTerm.toLowerCase()) || application.scheme_name.toLowerCase().includes(searchTerm.toLowerCase())
+  )), [applications, searchTerm]);
+
+  const verifyDocument = async (applicationId, documentId) => {
     try {
-      await api.verifyDocument(docId);
-      // Update local state to reflect verification
-      setApplications(prev => prev.map(app => {
-        if (app.id === appId) {
-          return {
-            ...app,
-            documents: app.documents.map(doc => 
-              doc.id === docId ? { ...doc, status: 'Verified' } : doc
-            )
-          };
-        }
-        return app;
-      }));
-    } catch (error) {
-      console.error('Error verifying document:', error);
+      await api.verifyDocument(documentId);
+      await fetchApplications();
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'Could not verify the document.');
     }
   };
 
-  const filteredApps = applications.filter(app => 
-    app.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    app.scholarshipName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const updateStatus = async (applicationId, status) => {
+    try {
+      await api.updateApplicationStatus(applicationId, status);
+      await fetchApplications();
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'Could not update application status.');
+    }
+  };
 
   return (
     <div className="flex-1 bg-gray-50 p-6 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Portal</h1>
-            <p className="text-gray-500 mt-1">Manage scholarship applications and verify documents.</p>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input 
-              type="text" 
-              placeholder="Search applications..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full md:w-64 bg-white"
-            />
-          </div>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div><h1 className="text-3xl font-bold text-gray-900">Admin portal</h1><p className="mt-1 text-gray-500">Review saved scholarship applications and their document verification status.</p></div>
+          <div className="relative"><Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" /><input type="search" placeholder="Search applications…" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 md:w-72" /></div>
         </div>
-
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-6 py-4 font-semibold text-gray-600 text-sm">Applicant</th>
-                    <th className="px-6 py-4 font-semibold text-gray-600 text-sm">Scholarship</th>
-                    <th className="px-6 py-4 font-semibold text-gray-600 text-sm">Status</th>
-                    <th className="px-6 py-4 font-semibold text-gray-600 text-sm">Documents</th>
+        {error && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {loading ? <div className="grid h-64 place-items-center text-gray-500">Loading applications…</div> : (
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="border-b bg-gray-50 text-gray-600"><tr><th className="px-5 py-4">Applicant</th><th className="px-5 py-4">Scholarship</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Documents</th></tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredApps.map((application) => (
+                  <tr key={application.id} className="align-top">
+                    <td className="px-5 py-4"><p className="font-medium text-gray-900">{application.student_name}</p><p className="mt-1 text-xs text-gray-500">{application.student_email}</p></td>
+                    <td className="px-5 py-4"><p className="font-medium text-indigo-700">{application.scheme_name}</p><p className="mt-1 text-xs text-gray-500">Match: {application.match_score}%</p></td>
+                    <td className="px-5 py-4"><select value={application.status === 'recommended' ? 'submitted' : application.status} onChange={(event) => updateStatus(application.id, event.target.value)} disabled={application.status === 'recommended'} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50">{STATUSES.map((status) => <option key={status} value={status}>{status.replace('_', ' ')}</option>)}</select></td>
+                    <td className="space-y-2 px-5 py-4">{application.documents.length ? application.documents.map((document) => <div key={document.id} className="flex min-w-64 items-center justify-between rounded border bg-gray-50 p-2"><span className="flex items-center text-gray-700"><FileText className="mr-2 h-4 w-4 text-gray-400" />{document.doc_type.replaceAll('_', ' ')}</span>{document.is_verified ? <span className="flex items-center text-xs font-medium text-green-700"><CheckCircle className="mr-1 h-3.5 w-3.5" />Verified</span> : <button onClick={() => verifyDocument(application.id, document.id)} className="rounded bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">Verify</button>}</div>) : <span className="text-xs text-gray-500">No uploaded documents</span>}</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredApps.length > 0 ? (
-                    filteredApps.map(app => (
-                      <tr key={app.id} className="hover:bg-gray-50/50 transition">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{app.studentName}</div>
-                          <div className="text-sm text-gray-500">{app.email}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-medium text-indigo-700">{app.scholarshipName}</div>
-                          <div className="text-xs text-gray-500 mt-1">Applied: {new Date(app.dateApplied).toLocaleDateString()}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                            app.status === 'Approved' ? 'bg-green-100 text-green-800' :
-                            app.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {app.status === 'Approved' && <CheckCircle className="w-3 h-3 mr-1" />}
-                            {app.status === 'Pending' && <Clock className="w-3 h-3 mr-1" />}
-                            {app.status === 'Rejected' && <XCircle className="w-3 h-3 mr-1" />}
-                            {app.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="space-y-3">
-                            {app.documents.map(doc => (
-                              <div key={doc.id} className="flex items-center justify-between bg-gray-50 p-2 rounded border">
-                                <div className="flex items-center">
-                                  <FileText className="w-4 h-4 text-gray-400 mr-2" />
-                                  <span className="text-sm text-gray-700">{doc.name}</span>
-                                </div>
-                                {doc.status === 'Verified' ? (
-                                  <span className="text-xs text-green-600 font-medium flex items-center bg-green-50 px-2 py-1 rounded">
-                                    <CheckCircle className="w-3 h-3 mr-1" /> Verified
-                                  </span>
-                                ) : (
-                                  <button 
-                                    onClick={() => handleVerify(app.id, doc.id)}
-                                    className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded hover:bg-indigo-100 transition font-medium"
-                                  >
-                                    Verify Document
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
-                        No applications found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                ))}
+                {filteredApps.length === 0 && <tr><td colSpan="4" className="px-5 py-12 text-center text-gray-500">No applications found.</td></tr>}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

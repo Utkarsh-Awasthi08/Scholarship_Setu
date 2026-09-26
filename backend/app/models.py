@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Boolean, Integer, Text, Date, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Float, Boolean, Integer, Text, Date, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -9,10 +9,27 @@ from app.database import Base
 def generate_uuid():
     return str(uuid.uuid4())
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=True)
+    google_subject = Column(String, unique=True, nullable=True, index=True)
+    role = Column(String, nullable=False, default="student")
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    student = relationship("Student", back_populates="user", uselist=False)
+    chat_sessions = relationship("ChatSession", back_populates="user")
+
+
 class Student(Base):
     __tablename__ = "students"
     
     id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id"), unique=True, nullable=False, index=True)
     full_name = Column(String, nullable=False)
     father_name = Column(String, nullable=False)
     mother_name = Column(String, nullable=False)
@@ -39,6 +56,7 @@ class Student(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    user = relationship("User", back_populates="student")
     education = relationship("Education", back_populates="student", uselist=False)
     documents = relationship("Document", back_populates="student")
     applications = relationship("Application", back_populates="student")
@@ -116,6 +134,7 @@ class ScholarshipScheme(Base):
 
 class Application(Base):
     __tablename__ = "applications"
+    __table_args__ = (UniqueConstraint("student_id", "scheme_id", name="uq_application_student_scheme"),)
     
     id = Column(String, primary_key=True, default=generate_uuid)
     student_id = Column(String, ForeignKey("students.id"), nullable=False)
@@ -147,9 +166,12 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
     
     id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     student_id = Column(String, ForeignKey("students.id"), nullable=True)
     session_data = Column(JSON, nullable=False)
     current_step = Column(String, nullable=False)
     collected_data = Column(JSON, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="chat_sessions")

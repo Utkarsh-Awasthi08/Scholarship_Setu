@@ -1,7 +1,7 @@
 import re
 import os
 import pytesseract
-from PIL import Image, ImageStat
+from PIL import Image, ImageStat, ImageFilter
 from typing import Dict, Any
 
 # Ensure tesseract path from env
@@ -23,15 +23,20 @@ async def process_document(file_path: str, doc_type: str) -> Dict[str, Any]:
                 "issues": quality['issues']
             }
 
+        image_for_ocr = img.convert("L").filter(ImageFilter.SHARPEN)
+        ocr_data = pytesseract.image_to_data(image_for_ocr, output_type=pytesseract.Output.DICT)
+        confidences = [float(value) for value in ocr_data.get("conf", []) if str(value).replace('.', '', 1).isdigit() and float(value) >= 0]
+        confidence = round((sum(confidences) / len(confidences) / 100) if confidences else 0.0, 2)
+
         extracted_data = {}
         if doc_type == "aadhaar":
-            extracted_data = await extract_aadhaar_data(img)
+            extracted_data = await extract_aadhaar_data(image_for_ocr)
         elif doc_type == "pan":
-            extracted_data = await extract_pan_data(img)
+            extracted_data = await extract_pan_data(image_for_ocr)
         elif doc_type == "marksheet_10" or doc_type == "marksheet_12":
-            extracted_data = await extract_marksheet_data(img)
+            extracted_data = await extract_marksheet_data(image_for_ocr)
         elif doc_type == "income_cert":
-            extracted_data = await extract_income_certificate(img)
+            extracted_data = await extract_income_certificate(image_for_ocr)
         else:
             # Fallback for other docs
             text = pytesseract.image_to_string(img)
@@ -39,8 +44,8 @@ async def process_document(file_path: str, doc_type: str) -> Dict[str, Any]:
             
         return {
             "extracted_data": extracted_data,
-            "confidence": 0.85, # Mock confidence for now
-            "status": "success" if extracted_data else "unclear",
+            "confidence": confidence,
+            "status": "success" if extracted_data and confidence >= 0.7 else "unclear",
             "issues": []
         }
     except Exception as e:
@@ -88,7 +93,7 @@ async def extract_pan_data(image: Image.Image) -> Dict[str, Any]:
     text = pytesseract.image_to_string(image)
     data = {}
     
-    pan_match = re.search(r'[A-Z]{5}[0-9]{4}[A-Z]{1}', text)
+    pan_match = re.search(r'\b[A-Z]{5}[0-9]{4}[A-Z]{1}\b', text.upper())
     if pan_match:
         data['pan_number'] = pan_match.group()
         
@@ -99,7 +104,6 @@ async def extract_marksheet_data(image: Image.Image) -> Dict[str, Any]:
     text = pytesseract.image_to_string(image)
     data = {}
     
-    # Mocking extraction of percentage
     percent_match = re.search(r'(\d{2,3}(\.\d{1,2})?)\s*%', text)
     if percent_match:
         data['percentage'] = float(percent_match.group(1))
@@ -122,12 +126,27 @@ async def validate_document_authenticity(extracted_data: dict, doc_type: str, st
     mismatches = []
     
     if doc_type == "aadhaar":
-        if 'aadhaar_number' in extracted_data and extracted_data['aadhaar_number'] != student_data.get('aadhaar_number'):
+        if 'aadhaar_number' in extracted_data and extracted_data['aadhaar_number'] != student_data.get('ask_aadhaar'):
             mismatches.append("Aadhaar number mismatch")
             
     elif doc_type == "pan":
-        if 'pan_number' in extracted_data and extracted_data['pan_number'] != student_data.get('pan_card'):
+        if 'pan_number' in extracted_data and extracted_data['pan_number'] != student_data.get('ask_pan'):
             mismatches.append("PAN number mismatch")
+    elif doc_type in {"marksheet_10", "marksheet_12"}:
+        expected_key = 'ask_10th_percentage' if doc_type == "marksheet_10" else 'ask_12th_percentage'
+        if 'percentage' in extracted_data:
+            try:
+                if abs(float(extracted_data['percentage']) - float(student_data.get(expected_key, 0))) > 1:
+                    mismatches.append("Marksheet percentage does not match the entered value")
+            except (TypeError, ValueError):
+                mismatches.append("Marksheet percentage could not be compared")
+    elif doc_type == "income_cert" and 'income_amount' in extracted_data:
+        try:
+            entered_income = float(student_data.get('ask_income', 0))
+            if entered_income and abs(float(extracted_data['income_amount']) - entered_income) > max(1000, entered_income * 0.05):
+                mismatches.append("Income certificate amount does not match the entered value")
+        except (TypeError, ValueError):
+            mismatches.append("Income certificate amount could not be compared")
             
     is_authentic = len(mismatches) == 0
     return {

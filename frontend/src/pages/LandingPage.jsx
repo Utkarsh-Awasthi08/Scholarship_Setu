@@ -19,8 +19,8 @@ const LandingPage = () => {
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 text-center">
             <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-              <div className="text-3xl font-bold mb-1">500+</div>
-              <div className="text-sm text-indigo-100">Scholarships</div>
+              <div className="text-3xl font-bold mb-1">14+</div>
+              <div className="text-sm text-indigo-100">Seeded Schemes</div>
             </div>
             <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
               <div className="text-3xl font-bold mb-1">10+</div>

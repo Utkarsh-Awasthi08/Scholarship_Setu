@@ -73,13 +73,13 @@ const DocumentUpload = ({ onUpload }) => {
         >
           <Camera className="w-10 h-10 text-gray-400 mb-2" />
           <p className="text-sm text-gray-600 mb-1">Click to take photo or upload file</p>
-          <p className="text-xs text-gray-400">Supported formats: JPG, PNG, PDF</p>
+          <p className="text-xs text-gray-400">Supported formats: JPG or PNG, up to 10 MB</p>
           <input 
             type="file" 
             ref={inputRef}
             onChange={handleChange} 
             className="hidden" 
-            accept="image/*,.pdf"
+            accept="image/jpeg,image/png"
             capture="environment"
           />
         </div>
