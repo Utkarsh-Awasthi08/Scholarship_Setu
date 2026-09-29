@@ -7,4 +7,10 @@ __pycache__/
 scholarship.db
 backend/uploads/
 uploads/
+.codex-finalizer/
+.ppt-build/
+.ppt-rendered/
+.ppt-rendered-v2/
+deliverables/
+ppt-assets/
 .DS_Store
