@@ -1,0 +1,57 @@
+flowchart TD
+    subgraph Citizens["👥 Citizen Touchpoints"]
+        WEB["🌐 Web App<br/>(React)"]
+        MOB["📱 Mobile App<br/>(Flutter)"]
+        WA["💬 WhatsApp Bot"]
+        VOICE["📞 Voice Bot<br/>(IVR)"]
+    end
+
+    subgraph Gateway["🔒 API Gateway"]
+        GW["Kong / Nginx<br/>Auth · Rate Limit · Logs"]
+    end
+
+    subgraph CoreServices["⚙️ Core Microservices"]
+        AUTH["Auth Service<br/>Aadhaar eKYC · OTP"]
+        PROFILE["Profile Service"]
+        SCHEME["Scheme Registry"]
+        APP["Application Service"]
+        TRACK["Tracking & Alerts"]
+        GRIEV["Grievance Service"]
+    end
+
+    subgraph AIServices["🤖 AI Services"]
+        ELIG["Eligibility Engine<br/>(ML Matching)"]
+        CHAT["Conversational AI<br/>(Gemini + Bhashini)"]
+        OCR["OCR & Doc Parser<br/>(Vision API)"]
+        FRAUD["Fraud Detection<br/>(Anomaly Detection)"]
+        PREDICT["Predictive Analytics<br/>(XGBoost)"]
+    end
+
+    subgraph Data["💾 Data Layer"]
+        PG["PostgreSQL"]
+        REDIS["Redis Cache"]
+        S3["Cloud Storage<br/>(Documents)"]
+        ES["Elasticsearch"]
+    end
+
+    subgraph External["🔗 External APIs"]
+        DL["DigiLocker"]
+        AADH["Aadhaar e-KYC"]
+        PFMS["PFMS"]
+        NPCI["NPCI"]
+        BHASH["Bhashini API"]
+    end
+
+    subgraph GovDash["📊 Government Dashboard"]
+        DASH["Analytics Dashboard<br/>(Metabase)"]
+        REPORT["Reports & Heatmaps"]
+    end
+
+    Citizens --> GW
+    GW --> CoreServices
+    GW --> AIServices
+    CoreServices --> Data
+    AIServices --> Data
+    CoreServices --> External
+    AIServices --> External
+    Data --> GovDash

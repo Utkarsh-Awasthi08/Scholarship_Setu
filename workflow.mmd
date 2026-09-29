@@ -1,0 +1,17 @@
+flowchart TB
+    subgraph Row1 ["Phase 1: User Onboarding & Profiling"]
+        direction LR
+        A1["1. Landing Page<br/>& Authentication"] --> A2["2. Profile<br/>Creation"] --> A3["3. Basic<br/>Demographics"] --> A4["4. Academics<br/>& Finances"]
+    end
+
+    subgraph Row2 ["Phase 2: Validation & Intelligence"]
+        direction LR
+        B1["5. Achievements<br/>Input"] --> B2["6. Document<br/>Uploads"] --> B3["7. Real-time<br/>OCR Check"] --> B4["8. Fraud Detection<br/>& Verification"]
+    end
+
+    subgraph Row3 ["Phase 3: Matching & Submission"]
+        direction LR
+        C1["9. Deterministic<br/>Matching Engine"] --> C2["10. Ranked<br/>Scholarships"] --> C3["11. Auto-fill<br/>Form Preview"] --> C4["12. Final<br/>Admin Submission"]
+    end
+
+    Row1 --> Row2 --> Row3

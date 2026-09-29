@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: scholarsetu-backend
+    env: docker
+    region: oregon # or frankfurt, ohio, singapore depending on your preference
+    plan: free
+    rootDir: backend
+    # If your FastAPI app has a health check route at /docs or / ping, you can set it here:
+    # healthCheckPath: /docs 
