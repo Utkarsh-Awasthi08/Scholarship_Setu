@@ -22,6 +22,8 @@ Students often need to compare scattered eligibility rules, repeat personal deta
 
 **ScholarSetu** brings the journey into one guided workspace: collect a verified profile in conversational steps, review document details, surface relevant scholarships, and keep applications visible after submission. It supports a practical human-review path for cases that need attention.
 
+![ScholarSetu student journey illustration](./docs/images/scholarsetu-journey-illustration.png)
+
 | Students get | Administrators get |
 | --- | --- |
 | A step-by-step profile conversation in English or Hindi | A protected queue for document and application review |
@@ -33,13 +35,13 @@ Students often need to compare scattered eligibility rules, repeat personal deta
 
 <a id="demo-gallery"></a>
 
-| Discover scholarships | Guided journey |
+| Discover scholarships | Guided chat |
 | --- | --- |
-| ![ScholarSetu landing page](./docs/images/app-home.png) | ![ScholarSetu guided flow](./docs/images/app-journey.png) |
+| ![ScholarSetu landing page](./docs/images/app-home.png) | ![ScholarSetu guided chat](./docs/images/app-chat.png) |
 
-| Matching features | Account access |
+| Scholarship directory | Account access |
 | --- | --- |
-| ![ScholarSetu features](./docs/images/app-features.png) | ![ScholarSetu authentication](./docs/images/app-access.png) |
+| ![ScholarSetu scholarship directory](./docs/images/app-directory.png) | ![ScholarSetu authentication](./docs/images/app-access.png) |
 
 ## Student workflow
 
