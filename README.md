@@ -1,154 +1,196 @@
-# ScholarSetu - AI-Powered Scholarship Assistant 🎓
+# ScholarSetu
 
-**Project Name:** ScholarSetu  
-**Event:** MP Online Tech Hackathon - "AI Innovation for Public Services & Citizen-Centric Governance"  
+<p align="center">
+  <strong>A guided scholarship discovery and application companion for students in Madhya Pradesh.</strong><br />
+  Built for the <strong>MP Online Tech Hackathon</strong> — AI innovation for public services and citizen-centric governance.
+</p>
 
----
+<p align="center">
+  <a href="#demo-gallery">Demo</a> ·
+  <a href="#student-workflow">Workflow</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#run-locally">Run locally</a>
+</p>
 
-## 🌟 Project Overview
-**ScholarSetu** is an intelligent, conversational AI assistant designed to democratize access to government scholarships. It specifically focuses on bridging the gap for schemes from Madhya Pradesh (MMVY, MPTAAS, Gaon Ki Beti, etc.) alongside Central Government schemes. 
+![ScholarSetu home screen](./docs/images/app-home.png)
 
-The traditional scholarship application process is plagued by confusing eligibility criteria, repetitive form-filling, manual document verification, and language barriers. ScholarSetu solves this by interacting with students via a friendly, WhatsApp-like chat interface. It asks for their details step-by-step in natural language, performs real-time OCR on uploaded documents, checks for duplicate applications, and ultimately recommends the best-matching scholarships. Once matched, it auto-fills the exact official government forms for the user.
+## The challenge
 
----
+Students often need to compare scattered eligibility rules, repeat personal details on several portals, and wait for documents to be checked. These obstacles are amplified for first-time applicants, rural students, and students who prefer Hindi guidance.
 
-## 🛑 Problem Statement: The Application Bottleneck
-Current e-governance portals (like NSP or MPTAAS) suffer from severe UX bottlenecks:
-1. **Opaque Eligibility Matrices:** Students do not know which out of the hundreds of scholarships they qualify for. They often apply to the wrong ones and face rejection.
-2. **Redundant Data Entry:** Students must manually fill out identical data (Name, DOB, Income) repeatedly across multiple isolated state and central portals.
-3. **Verification Delays:** Human nodal officers must manually verify thousands of uploaded JPEGs (Aadhaar, PAN, Marksheets), creating massive backlogs.
-4. **Digital Literacy & Language Barriers:** Complex English forms alienate rural students who primarily speak Hindi and may struggle with standard web forms.
+## The solution
 
-## 🧠 Detailed Approach (Agentic System Architecture)
-ScholarSetu is built as a deterministic, state-machine-driven agentic system. Here is a technical breakdown of its core components for engineers and AI agents reviewing the codebase:
+**ScholarSetu** brings the journey into one guided workspace: collect a verified profile in conversational steps, review document details, surface relevant scholarships, and keep applications visible after submission. It supports a practical human-review path for cases that need attention.
 
-### 1. The Conversational State Machine (`chatbot_service.py`)
-Instead of a static form, data collection is modeled as a Directed Acyclic Graph (DAG) state machine.
-- **State Tracking:** The `ChatSession` model stores a UUID and a JSON blob (`collected_data`). The `current_step` pointer dictates the active node in the graph (e.g., `ask_name` -> `ask_dob` -> `ask_category`).
-- **Conditional Branching:** The state machine evaluates edge transitions dynamically. If `collected_data['ask_state'] != 'MP'`, the machine prunes the `ask_samagra` and `doc_domicile` nodes from the execution path.
-- **Verification Loop:** Before committing a state transition, the engine halts at a `pending_confirmation_step` node, echoing the parsed value to the user ("You entered: X. Is this correct?").
+| Students get | Administrators get |
+| --- | --- |
+| A step-by-step profile conversation in English or Hindi | A protected queue for document and application review |
+| Personalised scholarship recommendations | Clear status controls and audit-friendly records |
+| OCR-assisted document upload and validation feedback | A view of student details, uploaded files, and review needs |
+| Application tracking and official scheme links | A focused workflow for resolving exceptions |
 
-### 2. Multi-Modal Ingestion & Pydantic Validation
-- **Speech & Translation:** The frontend utilizes the native browser `WebSpeechAPI` for STT/TTS. A translation hook intercepts `[HINDI]` payloads, triggering the backend to return a localized string for the active state node.
-- **Strict Typing:** Every user payload is passed through Pydantic validators. For instance, the `ask_pan` node strictly enforces a regex match for `[A-Z]{5}[0-9]{4}[A-Z]{1}` before allowing a state transition.
+## Demo gallery
 
-### 3. OCR Pipeline & Entity Cross-Referencing (`ocr_service.py`)
-- When a document step (e.g., `doc_aadhaar`) is reached, the uploaded binary is routed to `Pillow` and `pytesseract`.
-- **Confidence Scoring:** The OCR engine returns a JSON payload of extracted entities along with a `confidence` float. 
-- **Cross-Referencing:** The backend cross-references the OCR output (e.g., extracted DOB from Aadhaar) against the deterministic data stored in `ChatSession.collected_data`. If the delta exceeds a threshold, the document is flagged for the `/admin` portal manual review queue.
+<a id="demo-gallery"></a>
 
-### 4. The Deterministic Matching Engine
-Once the state machine reaches the `complete` node, the Evaluation Engine fires:
-- It iterates through all active `ScholarshipScheme` records in the database.
-- It calculates a `match_score` float by evaluating boolean flags (`is_for_mp_only`, `requires_bpl`) and numerical thresholds (`min_12th_percentage`, `max_family_income`) against the user's `collected_data`.
-- **Achievement Multipliers:** Bonus arrays (like `NTSE` or `JEE`) dynamically boost the match score, unlocking specialized schemes.
+| Discover scholarships | Guided journey |
+| --- | --- |
+| ![ScholarSetu landing page](./docs/images/app-home.png) | ![ScholarSetu guided flow](./docs/images/app-journey.png) |
 
-### 5. Hydration & Output Generation
-The matched schemes are returned to the React frontend. If the user clicks "View Form", the frontend Maps the JSON `collected_data` keys directly into a pixel-perfect React Component (`FormPreview.jsx`) that visually mimics the actual government portal, achieving zero-friction form completion.
+| Matching features | Account access |
+| --- | --- |
+| ![ScholarSetu features](./docs/images/app-features.png) | ![ScholarSetu authentication](./docs/images/app-access.png) |
 
----
+## Student workflow
 
-## 🚀 Key Features & Capabilities
-
-### 1. Conversational Data Collection (Smart Flow)
-- **Dynamic Questioning:** The bot dynamically asks questions based on previous answers. For example, it skips asking for Samagra ID and MP Domicile if the user is from outside Madhya Pradesh, and skips caste certificates for General category students.
-- **Strict Validation:** Validates all inputs in real-time (10-digit mobile numbers, valid emails, 12-digit Aadhaar, strictly formatted PAN, valid dates).
-- **Confirmation Loop:** Implements an "Is this correct? (Yes/No)" confirmation loop before locking in data to prevent typos.
-
-### 2. Multi-Modal Accessibility (Voice & Local Language)
-- **Speech-to-Text (Microphone):** Users can click the microphone icon to speak their answers instead of typing, making the platform accessible to less tech-savvy users.
-- **Text-to-Speech (Speaker):** The bot can read questions aloud to the user.
-- **Hindi Translation:** A built-in "Translate" button instantly converts and explains the bot's current question in simple Hindi to overcome language barriers.
-
-### 3. Advanced Authentication & Admin Portal
-- **3-Step Auth Wizard:** A beautiful, intuitive login flow separating New Users, Existing Users, and Admins.
-- **Google OAuth2 Integration:** Users can securely sign in using their Gmail accounts via `@react-oauth/google`.
-- **Admin Dashboard:** A dedicated, protected `/admin` portal where administrators can view submitted applications and manually verify user documents.
-- **Application Tracking:** Existing users can log in with their PAN card and instantly see a real-time timeline of their application status (Applied -> Under Review -> Approved).
-
-### 4. Real-Time OCR & Document Verification
-- Students can upload documents directly in the chat (Aadhaar, PAN, Marksheets, Income/Caste Certificates).
-- Built-in OCR engine extracts data and cross-references it with the user-provided chat inputs.
-- **Fallback Mechanism:** If the document is blurry or the OCR yields a low-confidence score, the user is given the option to either re-upload or pass it to a human agent for manual verification.
-
-### 5. Intelligent Scholarship Matching Engine
-- Matches students to 14+ seeded scholarships based on strict criteria: Family Income, 12th Board Percentages (differentiating between MP Board and CBSE/ICSE), Category, Gender, and Locale (Rural vs. Urban).
-- **Achievement Unlocks:** Students can input competitive achievements (NTSE, KVPY, JEE Advanced, Olympiads) which drastically boost match scores and unlock special scholarships.
-
-### 6. Government-Fidelity Form Auto-filling
-- Once scholarships are recommended, the user can click "View Filled Form".
-- The platform generates a pixel-perfect, bilingual (Hindi/English) preview of the exact official government form (e.g., the Medhavi Chhatra Yojana portal) pre-filled with the data collected during the chat.
-
----
-
-## 🛠️ Tech Stack
-
-**Frontend:**
-- **React.js (Vite)** for a lightning-fast single-page application.
-- **Tailwind CSS (v3)** for responsive, modern UI styling.
-- **Lucide React** for beautiful iconography.
-- **Web Speech API** for native browser voice recognition and text-to-speech.
-- **React Google OAuth** for secure authentication.
-
-**Backend:**
-- **FastAPI** for high-performance, asynchronous REST APIs.
-- **SQLite + SQLAlchemy (Async)** for robust local database management.
-- **Pydantic** for strict data validation and serialization.
-- **Tesseract OCR (pytesseract) + Pillow** for image processing and text extraction.
-
----
-
-## 📂 Database Schema & Models
-- `Student`: Stores core demographics, academic, and financial details.
-- `Document`: Tracks uploaded files, OCR confidence scores, and verification status.
-- `ScholarshipScheme`: Stores criteria for State and Central schemes.
-- `ChatSession`: Maintains the state machine of the chat so users can drop off and resume without losing progress.
-
----
-
-## 🏃‍♂️ How to Run Locally
-
-### 1. Backend Setup
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-
-# From the project root, copy .env.example to .env and set JWT_SECRET.
-# Set INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD once to create the first admin account.
-
-# Start the FastAPI server
-python -m uvicorn app.main:app --reload --port 8000
+```mermaid
+flowchart LR
+    A[Create account or sign in] --> B[Guided profile chat]
+    B --> C[Confirm collected details]
+    C --> D[Upload requested documents]
+    D --> E[OCR and profile cross-check]
+    E --> F{Needs manual review?}
+    F -->|Yes| G[Admin review queue]
+    F -->|No| H[Eligibility matching]
+    G --> H
+    H --> I[Scholarship recommendations]
+    I --> J[Open official scheme portal]
+    I --> K[Save local application]
+    K --> L[Student tracking and admin status updates]
 ```
-*Note: Make sure Tesseract OCR is installed on your Windows machine and the path is set in your environment variables.*
 
-### 2. Frontend Setup
-```bash
+### What the prototype demonstrates
+
+- **Guided profile collection** with validation and an explicit confirmation step before details are committed.
+- **English and Hindi assistance**, with browser speech features where supported by the device.
+- **Scholarship discovery** with search, filters, eligibility context, match scores, and links to scheme portals.
+- **Application tracking** for students, plus form previews for supported schemes.
+- **Document verification support** that extracts OCR text, compares relevant details, and routes exceptions to manual review.
+- **Role-aware workspaces** for students and administrators.
+- **Security foundations** including hashed passwords, JWT session handling, HttpOnly cookies, and protected API routes.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    UI[React + Vite + Tailwind CSS]
+    API[FastAPI REST API]
+    AUTH[JWT sessions and role checks]
+    CHAT[Guided chat state machine]
+    OCR[Tesseract OCR service]
+    MATCH[Deterministic matching engine]
+    DB[(SQLite + SQLAlchemy)]
+    ADMIN[Protected admin dashboard]
+
+    UI --> API
+    API --> AUTH
+    API --> CHAT
+    API --> OCR
+    API --> MATCH
+    CHAT --> DB
+    OCR --> DB
+    MATCH --> DB
+    ADMIN --> API
+```
+
+## Technology stack
+
+| Layer | Tools used |
+| --- | --- |
+| Frontend | React 18, Vite, Tailwind CSS, React Router, Axios, Lucide |
+| Backend | FastAPI, Pydantic, SQLAlchemy, Uvicorn |
+| Data | SQLite with seeded scholarship schemes and application records |
+| Authentication | Password hashing, JWT, secure session cookies, role checks |
+| Document processing | Pillow, Tesseract OCR, manual-review fallback |
+| Accessibility | Web Speech APIs for optional voice input/output; English/Hindi content |
+
+## Scholarship data
+
+The project ships with a seeded catalogue of Madhya Pradesh and central schemes. The matching engine evaluates profile signals such as domicile, category, family income, education, board marks, gender, rural status, and relevant achievements. Scheme information is designed for discovery and should be verified on the linked official portal before an application is submitted.
+
+## Run locally
+
+### Prerequisites
+
+- Python 3.10+
+- Node.js 18+
+- Tesseract OCR on your `PATH` if you want OCR extraction
+
+### 1. Clone and configure
+
+```powershell
+git clone https://github.com/harshgupta170704/ScholarShip-Helper.git
+cd ScholarShip-Helper
+Copy-Item .env.example backend\.env
+```
+
+Update `backend\.env` with a strong `JWT_SECRET` before using the project outside local development.
+
+### 2. Start the API
+
+```powershell
+cd backend
+py -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+The interactive API documentation is available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+### 3. Start the web app
+
+Open another terminal at the repository root:
+
+```powershell
 cd frontend
 npm install
-
-# Start the Vite React development server
-npm run dev
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-### 3. Environment Variables
-Create a `.env` file in the `frontend` folder and add your Google Client ID for OAuth to work properly:
-```env
-VITE_GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The Vite development proxy forwards `/api` calls to the FastAPI server on port `8000`.
+
+### Optional Google sign-in
+
+Add the same client ID to both locations if you configure Google OAuth:
+
+```text
+frontend/.env: VITE_GOOGLE_CLIENT_ID=...
+backend/.env:  GOOGLE_CLIENT_ID=...
 ```
 
-Create a root `.env` from [`.env.example`](.env.example) before starting the backend. `JWT_SECRET` is required; administrators are created only when both `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` are set. The frontend sends Google credentials to the backend, where they are verified against `GOOGLE_CLIENT_ID` before a session is issued.
+## API areas
 
-## Account and Application Flow
+| Area | Purpose |
+| --- | --- |
+| `/api/auth` | Registration, login, logout, and session identity |
+| `/api/chat` | Guided profile conversation and confirmation state |
+| `/api/documents` | Upload, OCR extraction, and verification outcomes |
+| `/api/scholarships` | Catalogue, filters, and personalised matching |
+| `/api/applications` | Saved applications and student-facing status tracking |
+| `/api/admin` | Protected review and application-management actions |
 
-1. Students create an account with an email and password, or use configured Google sign-in.
-2. The completed and confirmed chat profile is stored against that account. The system saves its scholarship recommendations, but it does not claim to submit an application to an external government portal.
-3. The student chooses **Save application** for a recommendation. That local application is visible in **Track Status** and can be updated by an administrator.
-4. Only server-authenticated administrators can access the admin endpoints, verify documents, and change application status.
+## Project structure
 
-Uploaded identity documents are deliberately excluded from Git. Keep them in private production storage and configure retention and access policies before handling real applicant data.
+```text
+ScholarShip-Helper/
+├── backend/
+│   ├── app/
+│   │   ├── routes/              # Auth, chat, documents, scholarships, admin
+│   │   ├── chatbot_service.py   # Guided data-collection flow
+│   │   ├── ocr_service.py       # OCR and document checks
+│   │   └── scholarship_data.py  # Seeded scheme catalogue
+│   └── requirements.txt
+├── frontend/
+│   └── src/                     # React views, components, and API client
+├── docs/images/                 # Prototype screenshots used in this README
+└── .env.example                 # Local configuration template
+```
 
----
+## Scope and responsible use
 
-*Built with ❤️ for the MP Online Tech Hackathon.*
+ScholarSetu is a working prototype for scholarship discovery, guided data collection, and workflow demonstration. It links students to official scheme portals and keeps a local application workflow; it does not submit applications to government systems on a student’s behalf. Production use requires review of scheme data, consent and privacy controls, operational security, accessibility testing, and integration approval from each relevant portal.
+
+## Repository
+
+[github.com/harshgupta170704/ScholarShip-Helper](https://github.com/harshgupta170704/ScholarShip-Helper)
